@@ -31,8 +31,7 @@ jobs:
         run: |
           upStream=https://github.com/${{ env.userName }}/${{ env.repoName }}
           echo "upStream=$upStream" >> $GITHUB_ENV
-          #commit=$(curl -sL $upStream/commits/${{ env.branchName }} |grep -o "/${{ env.userName }}/${{ env.repoName }}/commit/[a-z0-9]\+" |head -1 | cut -d\/ -f5)
-          commit=98a6b765a8824a40e4e1940e854f7e7cce335f6b
+          commit=$(curl -sL $upStream/commits/${{ env.branchName }} |grep -o "/${{ env.userName }}/${{ env.repoName }}/commit/[a-z0-9]\+" |head -1 | cut -d\/ -f5)
           if ! git log --oneline |grep -q "$commit"; then
             echo "commit=$commit" >> $GITHUB_ENV
             echo "commitS=${commit:0:7}" >> $GITHUB_ENV
@@ -57,12 +56,12 @@ jobs:
         run: |
           export LESSCHARSET=utf-8
           if [ "${{ env.commit }}" == "${{ env.lastCommit }}" ]; then
-            COMMIT_MESSAGE="$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))"  "`git log --pretty=format:%B ${{ env.commitS }} -1 |sed -e 's# \{2,\}#\n#g' -e '/^Merge pull/d' -e 's#"#\\"#g' -e '/^$/d' |sort -u`")"
+            COMMIT_MESSAGE="$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))"  "`git log --pretty=format:%B ${{ env.commitS }} -1 |sed -e 's# \{2,\}#\n#g' -e '/^Merge pull/d' -e '/^$/d' |sort -u`")"
           else
-            COMMIT_MESSAGE="$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))"  "`git log --pretty=format:%B ${{ env.commitS }}...${{ env.lastCommit }} |sed -e 's# \{2,\}#\n#g' -e '/^Merge pull/d' -e 's#"#\\"#g' -e '/^$/d' |sort -u`")"
+            COMMIT_MESSAGE="$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))"  "`git log --pretty=format:%B ${{ env.commitS }}...${{ env.lastCommit }} |sed -e 's# \{2,\}#\n#g' -e '/^Merge pull/d' -e '/^$/d' |sort -u`")"
           fi
           if [ ${#COMMIT_MESSAGE} -gt 0 ] && [ ${#COMMIT_MESSAGE} -le 1024 ]; then
-            ESCAPED="$COMMIT_MESSAGE"
+            ESCAPED=$(echo $COMMIT_MESSAGE |sed 's#%[eE]2[0-9a-zA-Z%]\{6\}##g')
           else
             COMMIT_URL=${{ env.upStream }}/commits/${{ env.branchName }}
             ESCAPED="$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$COMMIT_URL")"
@@ -85,6 +84,8 @@ jobs:
     env:
       product: ${{ matrix.product }}
       tag: ${{ needs.prepare.outputs.tag }}
+    outputs:
+      buildResult: ${{ env.buildResult }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/download-artifact@v2
@@ -111,6 +112,7 @@ jobs:
           sed -i '$a\RELEASE_STORE_PASSWORD=TVBoxOSC'       ./gradle.properties
           sed -i '$a\RELEASE_KEY_PASSWORD=TVBoxOSC'         ./gradle.properties
       - name: Build With Gradle
+        continue-on-error: true
         working-directory: source/
         run: |
           chmod +x gradlew
@@ -120,6 +122,7 @@ jobs:
           mkdir -p apk/
           for file in `find ~ -name "*.apk" -print`; do
             mv "$file" apk/${{ env.appName }}_${{ env.product }}_${{ env.tag }}.apk
+            echo "buildResult=yes" >> $GITHUB_ENV
           done
       - name: Upload App To Artifact
         uses: actions/upload-artifact@v3
@@ -129,6 +132,7 @@ jobs:
 
   upload:
     needs: [ prepare, build ]
+    if: needs.build.outputs.buildResult == 'yes'
     runs-on: ubuntu-latest
     env:
       commit: ${{ needs.prepare.outputs.commit }}
@@ -138,14 +142,12 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/download-artifact@v2
         with:
-          path: apk/
+          path: artifacts/
       - name: Prepare Files 
-        working-directory: apk/
         run: |
-          for file in `ls */*.*`; do
-            mv "$file" .
-          done
-          rm -rf */
+          mkdir apk
+          find artifacts -name "*.*" -exec cp {} apk \;
+          rm -rf artifacts/
       - name: Release and Upload Assets
         uses: softprops/action-gh-release@v1
         with:
@@ -161,10 +163,14 @@ jobs:
         working-directory: apk/
         run: |
           if [ -n "${{ secrets.CHANNEL_ID }}" ] && [ -n "${{ secrets.BOT_TOKEN }}" ]; then
-            export mobileRelease=$(find ~ -name "*mobile*.apk")
-            export leanbackRelease=$(find ~ -name "*leanback*.apk")
+            export apk1=$(find ~ -name "*leanback*.apk")
+            export apk2=$(find ~ -name "*mobile*.apk")
             export sourceCode=$(find ~ -name "*-source.zip")
-            curl -v "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMediaGroup?chat_id=${{ secrets.CHANNEL_ID }}&media=%5B%7B%22type%22%3A%22document%22%2C%20%22media%22%3A%22attach%3A%2F%2FmobileRelease%22%7D%2C%7B%22type%22%3A%22document%22%2C%20%22media%22%3A%22attach%3A%2F%2FleanbackRelease%22%7D%2C%7B%22type%22%3A%22document%22%2C%20%22media%22%3A%22attach%3A%2F%2FsourceCode%22%2C%20%22caption%22%3A%22Commit%3A%20${{ env.commit }}%0AChangelog%3A%0A${{ env.ESCAPED }}%22%7D%5D" -F mobileRelease="@$mobileRelease" -F leanbackRelease="@$leanbackRelease" -F sourceCode="@$sourceCode"
+            if [ -s "$apk2" ]; then
+              curl -v "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMediaGroup?chat_id=${{ secrets.CHANNEL_ID }}&media=%5B%7B%22type%22%3A%22document%22%2C%20%22media%22%3A%22attach%3A%2F%2Fapk1%22%7D%2C%7B%22type%22%3A%22document%22%2C%20%22media%22%3A%22attach%3A%2F%2Fapk2%22%7D%2C%7B%22type%22%3A%22document%22%2C%20%22media%22%3A%22attach%3A%2F%2FsourceCode%22%2C%20%22caption%22%3A%22Commit%3A%20${{ env.commit }}%0AChangelog%3A%0A${{ env.ESCAPED }}%22%2C%22parse_mode%22%3A%20%22Markdown%22%7D%5D" -F apk1="@$apk1" -F apk2="@$apk2" -F sourceCode="@$sourceCode"
+            else
+              curl -v "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendMediaGroup?chat_id=${{ secrets.CHANNEL_ID }}&media=%5B%7B%22type%22%3A%22document%22%2C%20%22media%22%3A%22attach%3A%2F%2Fapk1%22%7D%2C%7B%22type%22%3A%22document%22%2C%20%22media%22%3A%22attach%3A%2F%2FsourceCode%22%2C%20%22caption%22%3A%22Commit%3A%20${{ env.commit }}%0AChangelog%3A%0A${{ env.ESCAPED }}%22%2C%22parse_mode%22%3A%20%22Markdown%22%7D%5D" -F apk1="@$apk1" -F sourceCode="@$sourceCode"
+            fi
           fi
       - name: Push to master
         run: |
