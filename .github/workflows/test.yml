@@ -18,9 +18,9 @@ jobs:
           fetch-depth: 0
       - name: Check New Commit
         run: |
-          upStream=https://github.com/FongMi/BearTV
+          upStream=https://github.com/FongMi/TV
           echo "upStream=$upStream" >> $GITHUB_ENV
-          commit=$(curl -sL $upStream/commits/main |grep -o '/FongMi/BearTV/commit/[a-z0-9]\+' |head -1 | cut -d\/ -f5)
+          commit=$(curl -sL $upStream/commits/main |grep -o '/FongMi/TV/commit/[a-z0-9]\+' |head -1 | cut -d\/ -f5)
           if ! git log --oneline |grep -q "$commit"; then
             echo "commit=$commit" >> $GITHUB_ENV
             echo "commitS=${commit:0:7}" >> $GITHUB_ENV
@@ -28,14 +28,14 @@ jobs:
       - name: Checkout Source Code and Zip
         if: ${{ env.commit }}
         run: |
-          git clone ${{ env.upStream }} BearTV
-          cd BearTV
+          git clone ${{ env.upStream }} TV
+          cd TV
           git checkout ${{ env.commit }}
           echo "tag=$(git log --date=format:'%Y%m%d-%H%M' --pretty=format:%cd ${{ env.commitS }} -1)" >> $GITHUB_ENV
           zip -q -x ".git/*" -r ${{ env.commitS }}-source.zip .
       - name: Release Apk Sign
         if: ${{ env.commit }}
-        working-directory: BearTV
+        working-directory: TV
         run: |
           signingConfigs='ICAgIHNpZ25pbmdDb25maWdzIHtcCiAgICAgICAgaWYgKHByb2plY3QuaGFzUHJvcGVydHkoIlJFTEVBU0VfU1RPUkVfRklMRSIpKSB7XAogICAgICAgICAgICBteUNvbmZpZyB7XAogICAgICAgICAgICAgICAgc3RvcmVGaWxlIGZpbGUoUkVMRUFTRV9TVE9SRV9GSUxFKVwKICAgICAgICAgICAgICAgIHN0b3JlUGFzc3dvcmQgUkVMRUFTRV9TVE9SRV9QQVNTV09SRFwKICAgICAgICAgICAgICAgIGtleUFsaWFzIFJFTEVBU0VfS0VZX0FMSUFTXAogICAgICAgICAgICAgICAga2V5UGFzc3dvcmQgUkVMRUFTRV9LRVlfUEFTU1dPUkRcCiAgICAgICAgICAgICAgICB2MVNpZ25pbmdFbmFibGVkIHRydWVcCiAgICAgICAgICAgICAgICB2MlNpZ25pbmdFbmFibGVkIHRydWVcCiAgICAgICAgICAgICAgICBlbmFibGVWM1NpZ25pbmcgPSB0cnVlXAogICAgICAgICAgICAgICAgZW5hYmxlVjRTaWduaW5nID0gdHJ1ZVwKICAgICAgICAgICAgfVwKICAgICAgICB9XAogICAgfVwKXA=='
           signingConfig='ICAgICAgICAgICAgaWYgKHByb2plY3QuaGFzUHJvcGVydHkoIlJFTEVBU0VfU1RPUkVfRklMRSIpKSB7XAogICAgICAgICAgICAgICAgc2lnbmluZ0NvbmZpZyBzaWduaW5nQ29uZmlncy5teUNvbmZpZ1wKICAgICAgICAgICAgfVwK'
@@ -47,32 +47,32 @@ jobs:
             lintOptions="$(echo "$lintOptions" |base64 -d )"
             sed -i "/defaultConfig {/i\\$lintOptions " app/build.gradle
           fi
-          cp -f ${{ github.workspace }}/.github/workflows/BearTV.jks app/BearTV.jks
-          sed -i '$a\RELEASE_STORE_FILE=./BearTV.jks'       ./gradle.properties
+          cp -f ${{ github.workspace }}/.github/workflows/TVBoxOSC.jks app/TVBoxOSC.jks
+          sed -i '$a\RELEASE_STORE_FILE=./TVBoxOSC.jks'       ./gradle.properties
           sed -i '$a\RELEASE_KEY_ALIAS=TVBoxOSC'            ./gradle.properties
           sed -i '$a\RELEASE_STORE_PASSWORD=TVBoxOSC'       ./gradle.properties
           sed -i '$a\RELEASE_KEY_PASSWORD=TVBoxOSC'         ./gradle.properties
       - name: Build With Gradle
         if: ${{ env.commit }}
-        working-directory: BearTV
+        working-directory: TV
         run: |
           chmod +x gradlew
           ./gradlew assemblerelease --build-cache --parallel --daemon --warning-mode all --stacktrace
       - name: Prepare App
         if: ${{ env.commit }}
-        working-directory: BearTV
+        working-directory: TV
         run: |
           rm -rf apk/
           mkdir -p apk/
           for file in `find ~ -name "*release*.apk" -print`; do
-            mv "$file" apk/BearTV_release_${{ env.tag }}.apk
+            mv "$file" apk/TV_release_${{ env.tag }}.apk
           done
       - name: Upload App To Artifact
         uses: actions/upload-artifact@v3
         if: ${{ env.commit }}
         with:
           name: ${{ env.tag }}
-          path: BearTV/apk/*
+          path: TV/apk/*
       - name: Release and Upload Assets
         uses: softprops/action-gh-release@v1
         if: ${{ env.commit }}
@@ -81,19 +81,19 @@ jobs:
           tag_name: ${{ env.tag }}
           body: ${{ env.commit }}
           files: |
-            BearTV/apk/*
-            BearTV/${{ env.commitS }}-source.zip
+            TV/apk/*
+            TV/${{ env.commitS }}-source.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Post To Telegram
         if: ${{ env.commit }}
         run: |
           if [ -n "${{ secrets.CHANNEL_ID }}" ] && [ -n "${{ secrets.BOT_TOKEN }}" ]; then
-            OUTPUT="${{ github.workspace }}/BearTV/apk/"
+            OUTPUT="${{ github.workspace }}/TV/apk/"
             export appRelease=$(find $OUTPUT -name "*release*.apk")
-            export sourceCode="${{ github.workspace }}/BearTV/${{ env.commitS }}-source.zip"
+            export sourceCode="${{ github.workspace }}/TV/${{ env.commitS }}-source.zip"
             lastCommit=`git log --oneline |grep -o '[a-z0-9]\{40\}' |head -1`
-            cd BearTV
+            cd TV
             export LESSCHARSET=utf-8
             if [ "${{ env.commit }}" == "${lastCommit}" ]; then
               COMMIT_MESSAGE="$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))"  "`git log --pretty=format:%B ${{ env.commitS }} -1 |sed -e '/^Merge pull/d' -e '/^$/d' |sort -u`")"
@@ -111,7 +111,7 @@ jobs:
       - name: Push to master
         if: ${{ env.commit }}
         run: |
-          rm -rf BearTV
+          rm -rf TV
           sed -i "/Updated Commit/c\\+ Updated Commit: ${{ env.commit }}" README.md
           sed -i '/url =/d' ./.git/config
           git config --local user.name "github-actions[bot]"
