@@ -76,6 +76,7 @@ jobs:
 
   build:
     needs: prepare
+    if: needs.prepare.outputs.tag
     strategy:
       matrix:
         product: [ leanback, mobile ]
