@@ -2,10 +2,7 @@ name: Test
 
 on:
   schedule:
-    - cron: 15,45 22-23,0-18 * * *
-  push:
-    branches:
-      - master
+    - cron: 45 0/4 * * *
   workflow_dispatch:
 
 
@@ -76,6 +73,7 @@ jobs:
 
   build:
     needs: prepare
+    if: needs.prepare.outputs.tag
     strategy:
       matrix:
         product: [ leanback, mobile ]
