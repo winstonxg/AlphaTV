@@ -6,4 +6,4 @@
 [![Total](https://shields.io/github/downloads/o0HalfLife0o/BearTV/total?logo=Bookmeter&label=Counts&logoColor=yellow&color=yellow)](https://github.com/o0HalfLife0o/BearTV/releases)
 
 + Upstream Code: [FongMi/TV](https://github.com/FongMi/TV)
-+ Updated Commit: 2b2af1cadb0f8fd0f00641821d42f8385df4b761
++ Updated Commit: 3e5f2919f86d47610a96fed44063f189283fe9a4
