@@ -110,7 +110,7 @@ jobs:
           sed -i '$a\RELEASE_STORE_PASSWORD=TVBoxOSC'       ./gradle.properties
           sed -i '$a\RELEASE_KEY_PASSWORD=TVBoxOSC'         ./gradle.properties
       - name: Build With Gradle
-        #continue-on-error: true
+        continue-on-error: true
         working-directory: source/
         run: |
           chmod +x gradlew
