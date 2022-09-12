@@ -92,7 +92,6 @@ jobs:
           unzip -d source/ *-source/*-source.zip
           rm -rf *-source/
       - uses: actions/cache@v3
-        if: ${{ env.commit }}
         with:
           path: |
             ~/.gradle/caches
