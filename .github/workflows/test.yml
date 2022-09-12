@@ -92,14 +92,13 @@ jobs:
           unzip -d source/ *-source/*-source.zip
           rm -rf *-source/
       - uses: actions/cache@v3
-        if: ${{ env.commit }}
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-${{ matrix.userName }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-${{ env.userName }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.userName }}-
+            ${{ runner.os }}-${{ env.userName }}-
       - name: Release Apk Sign
         working-directory: source/
         run: |
